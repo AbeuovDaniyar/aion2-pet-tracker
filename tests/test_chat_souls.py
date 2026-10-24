@@ -172,3 +172,43 @@ def test_worker_counts_one_new_soul(tmp_path):
         w._tick()
     store.close()
     assert [(g.pet_name, g.amount) for g in got] == [("Manduri Fighter", 1)]
+
+
+# ------------------------------------------------------------------ countdown + repeated chat lines
+
+@pytestmark_store
+def test_countdown_uses_pets_own_requirement(store):
+    store.record_level_requirement(2, 75)
+    p = pid(store, "Manduri Fighter")
+    pr = store.progress(p)
+    pr.level, pr.souls_have, pr.souls_need = 2, 74, 150     # a pet that needs more than the usual 75
+    store.save_progress(pr)
+    assert store.souls_to_max(p) == 76                      # used to say 1 and get stuck there
+    for _ in range(75):
+        store.add_souls(p, 1)
+    assert store.souls_to_max(p) == 1
+    assert store.add_souls(p, 1)["result"] == "maxed"
+
+
+@pytestmark_store
+def test_most_common_requirement_wins(store):
+    for need in (25, 25, 25, 40):
+        store.record_level_requirement(1, need)
+    assert store.level_requirements()[1] == 25
+
+
+def test_repeated_chat_lines_warn_once():
+    from PySide6.QtCore import QCoreApplication
+    from app.ui.autoscan import AutoScanWorker
+
+    QCoreApplication.instance() or QCoreApplication([])
+    w = AutoScanWorker(lambda: None)
+    got = []
+    w.notice.connect(got.append)
+    w._check_repeated_chat([K1, MF, MF, MF, MF, MF])
+    w._check_repeated_chat([MF] * 9)
+    assert len(got) == 1 and "same soul message" in got[0]
+    w2 = AutoScanWorker(lambda: None)
+    w2.notice.connect(got.append)
+    w2._check_repeated_chat([MF, K1, MF, K2, MF, K3])        # mixed chat: fine, no warning
+    assert len(got) == 1

@@ -358,8 +358,12 @@ class ScanController(QObject):
                 self.overlay.show_toast(f"{scan.error}{hint}", 6000)
                 self.message.emit(scan.error + hint)
             return
-        if scan.auto_accept:
+        if scan.auto_accept or self._trust_first(scan):
             self._finish(scan, scan.match.pet_id)
+            return
+        if not self.settings.get("confirm_lookalikes", False):
+            # no confirmations: a read that isn't clearly any pet is skipped, never guessed
+            self.message.emit(f"Skipped unclear read “{scan.name}”")
             return
         if any(q.match and scan.match and q.match.pet_id == scan.match.pet_id and q.name == scan.name
                for q in self.queue):
@@ -369,6 +373,15 @@ class ScanController(QObject):
         if len(self.queue) == 1:
             self._register_confirm()
         self._show_pending()
+
+    def _trust_first(self, scan) -> bool:
+        """Default: save the best match straight away (it's almost always right). Only reads that
+        really are a pet name are trusted: a solid match score and a readable level line."""
+        if self.settings.get("confirm_lookalikes", False):
+            return False
+        m = scan.match
+        return bool(m and m.pet_id and scan.name and not scan.error and m.score >= 70
+                    and scan.level is not None)
 
     def _show_pending(self):
         scan = self.pending

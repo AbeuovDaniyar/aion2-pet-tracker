@@ -361,6 +361,33 @@ def build(app, store, settings, show: bool = True, hotkeys=None) -> Parts:
 
     show_map.toggled.connect(set_show_map)
 
+    def sync_map_controls(on):
+        for w in (show_map, win.overlay_map_btn):
+            w.blockSignals(True)
+            w.setChecked(on)
+            w.blockSignals(False)
+        win.overlay_map_btn.setText("Overlay map: on" if on else "Overlay map: off")
+
+    def toggle_map(on):
+        set_show_map(on)
+        sync_map_controls(on)
+
+    show_map.toggled.disconnect()
+    show_map.toggled.connect(toggle_map)
+    win.overlay_map_btn.toggled.connect(toggle_map)
+    sync_map_controls(settings["overlay"].get("show_map", True))
+    win._toggle_overlay_map = lambda: toggle_map(not settings["overlay"].get("show_map", True))
+
+    confirm = win.scan_menu.addAction("Ask before saving look-alike names")
+    confirm.setCheckable(True)
+    confirm.setChecked(settings.get("confirm_lookalikes", False))
+
+    def set_confirm(on):
+        settings["confirm_lookalikes"] = on
+        save_settings(settings)
+
+    confirm.toggled.connect(set_confirm)
+
     hide_cap = win.overlay_menu.addAction("Hide overlay from screenshots / streams")
     hide_cap.setToolTip("Off: Discord, OBS and screenshots show the overlay. On: only you see it.")
     hide_cap.setCheckable(True)
@@ -416,6 +443,8 @@ def build(app, store, settings, show: bool = True, hotkeys=None) -> Parts:
             win.overlay_show.blockSignals(True)
             win.overlay_show.setChecked(overlay.isVisible())
             win.overlay_show.blockSignals(False)
+        elif action == "toggle_overlay_map":
+            win._toggle_overlay_map()
         elif action == "overlay_interactive":
             if not overlay.isVisible():
                 overlay.show()

@@ -49,7 +49,8 @@ Use the **Overlay ▾** button in the tracker header. No hotkey is needed, so it
 - *Move / resize* lets you drag it, and drag its left or right edge (orange bars) to set the width. Ctrl+wheel
   changes the text size. Click *Done moving / resizing* when finished.
 - *Text size*: Small, Normal, Large or Extra large.
-- *Show live map when a pet is selected* turns the overlay map on or off.
+- *Show live map when a pet is selected* turns the overlay map on or off. The **Overlay map: on/off** button in
+  the header (or `Ctrl+Shift+M`) does the same.
 - *Hide overlay from screenshots / streams*: off by default, so Discord, OBS and screenshots show the overlay.
   Turn it on to keep it private. Discord **window** capture of the game never includes overlays; share the
   screen instead.
@@ -71,9 +72,10 @@ Use the **Overlay ▾** button in the tracker header. No hotkey is needed, so it
 
 Opening the Pets window switches to pet scanning automatically; closing it switches back to field mode.
 
-**Strict name matching.** Exact names save right away. Anything in a look-alike family (Karnif / Tamed Karnif,
-Spider / Unstable Spider) asks first. Answer with the buttons in the tracker's banner, or with these hotkeys
-while a scan waits: `Ctrl+Shift+Y` first choice, `Ctrl+Shift+1/2/3` pick, `Ctrl+Shift+N` discard.
+**Name matching.** Each read is saved as the best-matching pet straight away. Reads that aren't clearly any pet
+(menu text, half-drawn frames) are skipped, never guessed. If you'd rather confirm look-alike names (Karnif /
+Tamed Karnif) yourself, turn on Scan ▸ *Ask before saving look-alike names*. Then a banner and the hotkeys
+`Ctrl+Shift+Y` (first choice), `Ctrl+Shift+1/2/3` (pick) and `Ctrl+Shift+N` (discard) let you answer.
 
 **Field mode options** (Scan menu and `config/settings.json`, `field` section):
 - `mode`: `"target"` (default, cheap) reads the target frame; `"full"` scans the whole middle of the screen for
@@ -112,6 +114,13 @@ Advanced).
 3. The tracker reads the **English** game client. Other client languages show other pet names.
 4. Still nothing? Use Scan ▸ **Save diagnostic report…** with the Pets window open. It saves a zip (monitor
    screenshots, what OCR read, settings, crash log) and opens its folder. Send that zip to the developer.
+
+**The souls-to-max countdown stops going down**
+- If the chat shows the **same soul message over and over** (only "Obtained 1 Pino Soul Points.", nothing in
+  between), each new line looks identical to the one before and can't be counted. The tracker warns when it
+  sees this. Show Kina / loot messages in that chat tab, or turn on chat timestamps, so each line differs.
+- Keep the chat box where it is by default (bottom left), or set `field.chat_region` in the settings.
+- Scanning the pet in the Pets window always sets the exact numbers again.
 
 **The app crashed**: details are written to `%LOCALAPPDATA%\AION2 Pet Tracker\crash.log`, which is also included
 in the diagnostic report.

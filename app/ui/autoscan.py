@@ -87,6 +87,7 @@ class AutoScanWorker(QObject):
         self._cal_hint_sent = False
         self._black_since: Optional[float] = None
         self._black_warned = False
+        self._dup_warned = False
         self.mode = "field" if self.field.get("enabled", True) else "pets"
 
     # ------------------------------------------------------------------ setup
@@ -470,11 +471,27 @@ class AutoScanWorker(QObject):
     def _handle_chat(self, lines):
         if self._pet_names is None:
             self._pet_names = {pid: p.name for pid, p in self._scanner.store.pets.items()}
-        new = self._chat.feed(chat_lines(lines))
+        visible = chat_lines(lines)
+        self._check_repeated_chat(visible)
+        new = self._chat.feed(visible)
         if new:
             gains = soul_gains(new, self._pet_names)
             if gains:
                 self.souls.emit(gains)
+
+    def _check_repeated_chat(self, visible: list[str]):
+        """A chat showing only the same soul message over and over can't be counted: a new line looks
+        exactly like the one before, so the screen doesn't change. Tell the user once how to fix it."""
+        from app.ocr.chat import parse_soul, same_line
+
+        if self._dup_warned or len(visible) < 5:
+            return
+        tail = visible[-5:]
+        if parse_soul(tail[-1]) and all(same_line(x, tail[-1]) for x in tail):
+            self._dup_warned = True
+            self.notice.emit("Your chat shows the same soul message over and over, so new souls look identical "
+                             "and can't be counted. Show Kina / loot messages in that chat tab (or turn on chat "
+                             "timestamps) so each line is different.")
 
     @Slot()
     def shutdown(self):

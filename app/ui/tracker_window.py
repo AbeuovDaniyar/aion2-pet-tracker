@@ -653,6 +653,11 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QActionGroup
         from app.ui.overlay import SIZES
 
+        self.overlay_map_btn = QPushButton("Overlay map")
+        self.overlay_map_btn.setCheckable(True)
+        self.overlay_map_btn.setToolTip("Show the live spawn map in the overlay when you click a pet in game "
+                                        "(Ctrl+Shift+M)")
+        hl.addWidget(self.overlay_map_btn)
         self.overlay_btn = QPushButton("Overlay ▾")
         self.overlay_menu = QMenu(self.overlay_btn)
         self.overlay_btn.setMenu(self.overlay_menu)

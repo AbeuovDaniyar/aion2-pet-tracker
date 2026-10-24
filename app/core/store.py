@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS ocr_log (
   parsed_json TEXT, confidence REAL, screenshot_path TEXT, accepted INTEGER
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS level_need_counts (
+  level INTEGER, need INTEGER, n INTEGER DEFAULT 1, PRIMARY KEY (level, need)
+);
 CREATE TABLE IF NOT EXISTS soul_log (
   id INTEGER PRIMARY KEY, ts TEXT, pet_id TEXT, amount INTEGER, text TEXT, result TEXT
 );
@@ -50,7 +53,9 @@ DEFAULT_SETTINGS = {
         "scan": "ctrl+shift+p",
         "toggle_overlay": "ctrl+shift+o",
         "overlay_interactive": "ctrl+shift+i",
+        "toggle_overlay_map": "ctrl+shift+m",
     },
+    "confirm_lookalikes": False,   # True = ask before saving a look-alike name (Karnif / Tamed Karnif)
     "confirm_hotkeys": {
         "confirm_yes": "ctrl+shift+y",
         "confirm_no": "ctrl+shift+n",
@@ -297,10 +302,16 @@ class Store:
 
     # ------------------------------------------------------------------ level requirements
     def record_level_requirement(self, level: int, need: int) -> None:
+        """Remember how many souls a level took. Pets can differ, so count every value seen and use
+        the most common one as the default for pets that haven't been scanned at that level."""
+        self.db.execute("INSERT INTO level_need_counts(level, need) VALUES (?, ?) "
+                        "ON CONFLICT(level, need) DO UPDATE SET n = n + 1", (level, need))
+        best = self.db.execute("SELECT need FROM level_need_counts WHERE level=? ORDER BY n DESC, need DESC "
+                               "LIMIT 1", (level,)).fetchone()[0]
         self.db.execute(
             "INSERT INTO level_requirements(level, need) VALUES (?, ?) "
             "ON CONFLICT(level) DO UPDATE SET need=excluded.need, seen_count=seen_count+1",
-            (level, need),
+            (level, best),
         )
         self.db.commit()
 
@@ -390,6 +401,8 @@ class Store:
         else:
             start, done = pr.level, (pr.souls_have or 0)
         need = [reqs.get(l) for l in range(start, mx)]
+        if need and pr.unlocked and pr.level is not None and pr.souls_need:
+            need[0] = pr.souls_need   # this pet's own requirement for its current level (from the scan)
         if any(v is None for v in need):
             return None
         return max(sum(need) - done, 0)
