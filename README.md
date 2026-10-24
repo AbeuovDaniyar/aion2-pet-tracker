@@ -73,7 +73,9 @@ Use the **Overlay ▾** button in the tracker header. No hotkey is needed, so it
 Opening the Pets window switches to pet scanning automatically; closing it switches back to field mode.
 
 **Name matching.** Each read is saved as the best-matching pet straight away. Reads that aren't clearly any pet
-(menu text, half-drawn frames) are skipped, never guessed. If you'd rather confirm look-alike names (Karnif /
+(menu text, half-drawn frames) are skipped, never guessed. Special pets that aren't part of the 200-pet
+collection (Twitch drops, cash shop, founder's pack, …) are skipped too, including variants of a known name
+like "Shiny Konutin Worker". If you'd rather confirm look-alike names (Karnif /
 Tamed Karnif) yourself, turn on Scan ▸ *Ask before saving look-alike names*. Then a banner and the hotkeys
 `Ctrl+Shift+Y` (first choice), `Ctrl+Shift+1/2/3` (pick) and `Ctrl+Shift+N` (discard) let you answer.
 

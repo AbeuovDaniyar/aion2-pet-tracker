@@ -380,8 +380,15 @@ class ScanController(QObject):
         if self.settings.get("confirm_lookalikes", False):
             return False
         m = scan.match
-        return bool(m and m.pet_id and scan.name and not scan.error and m.score >= 70
-                    and scan.level is not None)
+        if not (m and m.pet_id and scan.name and not scan.error and scan.level is not None):
+            return False
+        if m.score == 100:
+            return True
+        # Special pets (Twitch drops, cash shop, founder's pack...) aren't in the 200-pet list. Only accept
+        # what is clearly an OCR slip of a known name, never a different word or a known name with an extra
+        # word ("Shiny Konutin Worker" is not "Konutin Worker").
+        from app.ocr.match import differs_by_edge_words
+        return m.score >= 88 and not differs_by_edge_words(scan.name, m.name)
 
     def _show_pending(self):
         scan = self.pending
