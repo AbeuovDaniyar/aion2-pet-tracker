@@ -105,7 +105,37 @@ def _open_folder(path: Path):
     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
+def _install_crash_log():
+    """Write unexpected errors (and hard crashes) to crash.log in the data folder."""
+    import faulthandler
+    import traceback
+    from datetime import datetime
+
+    log = USER / "crash.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fh = open(log, "a", encoding="utf-8")
+        fh.write(f"
+=== start {datetime.now().isoformat(timespec='seconds')} ===
+")
+        fh.flush()
+        faulthandler.enable(fh)  # native crashes (access violations) with the Python stack
+        _install_crash_log.fh = fh
+    except OSError:
+        return
+
+    def hook(etype, value, tb):
+        fh.write(f"--- {datetime.now().isoformat(timespec='seconds')} unhandled error
+")
+        fh.write("".join(traceback.format_exception(etype, value, tb)))
+        fh.flush()
+        sys.__excepthook__(etype, value, tb)
+
+    sys.excepthook = hook
+
+
 def main() -> int:
+    _install_crash_log()
     from PySide6.QtCore import QCoreApplication, Qt
     QCoreApplication.setAttribute(Qt.AA_ShareOpenGLContexts)  # required by the embedded live map
     app = QApplication(sys.argv)

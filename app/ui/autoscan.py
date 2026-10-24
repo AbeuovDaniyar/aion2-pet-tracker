@@ -26,6 +26,9 @@ CHANGE_THRESHOLD = 6.0      # mean grey-level difference that counts as "a diffe
 PART_THRESHOLD = 3.0        # same, for field regions (target frame, chat)
 COLLECTION_EVERY_S = 15     # re-read "Collection Status x/y" at most this often
 IDLE_STOP_S = 10 * 60       # (field mode off) stop by itself after this long without seeing a pet
+CAL_EVERY_S = 10            # until this screen is calibrated, look for the Pets window this often
+CAL_OTHER_MONITORS_EVERY = 3  # ...and on the other monitors every Nth attempt
+BLACK_WARN_S = 8            # all-black captures for this long -> warn (exclusive fullscreen)
 
 # Default field regions as screen fractions (x1, y1, x2, y2), measured at 1920x1080.
 TARGET_REGION = (0.36, 0.01, 0.64, 0.09)     # target frame: level, name, distance, genus tag
@@ -48,6 +51,8 @@ class AutoScanWorker(QObject):
     status = Signal(str)            # short human status for the overlay
     stopped = Signal(str)           # reason
     error = Signal(str)
+    notice = Signal(str)            # one-off hints: calibrated, black screen, monitor switched
+    monitor_changed = Signal(int)   # the game was found on another monitor
 
     def __init__(self, scanner_factory, interval_ms: int = 250, field: Optional[dict] = None):
         super().__init__()
@@ -77,6 +82,11 @@ class AutoScanWorker(QObject):
         self._last_field = 0.0
         self._part_sigs: dict[str, object] = {}
         self._last_hits: list = []
+        self._cal_last = 0.0
+        self._cal_attempts = 0
+        self._cal_hint_sent = False
+        self._black_since: Optional[float] = None
+        self._black_warned = False
         self.mode = "field" if self.field.get("enabled", True) else "pets"
 
     # ------------------------------------------------------------------ setup
@@ -202,6 +212,10 @@ class AutoScanWorker(QObject):
         if self._busy:
             return
         now = time.monotonic()
+        if self._sct is not None and not self._calibrated() and now - self._cal_last >= CAL_EVERY_S:
+            self._cal_last = now
+            if self._try_calibrate(now):
+                return
         if self.mode == "field":
             self._field_tick(now)
             return
@@ -212,7 +226,7 @@ class AutoScanWorker(QObject):
             profile = self._profile()
             n, i = profile["name"], profile["insight"]
             box = (min(n[0], i[0]), min(n[1], i[1]), max(n[2], i[2]), max(n[3], i[3]))
-            sig = self._panel_sig_from(self._grab_box(box), box[:2], profile)
+            sig = self._panel_sig_from(self._mask(self._grab_box(box), box), box[:2], profile)
             if signature_diff(sig, self._last_sig) < CHANGE_THRESHOLD:
                 return                                  # same panel as last read
             if signature_diff(sig, self._candidate) >= CHANGE_THRESHOLD:
@@ -221,12 +235,13 @@ class AutoScanWorker(QObject):
             if now < self._backoff_until:
                 return
             self._busy = True
-            img = self._grab()
+            img = self._mask(self._grab(), (0, 0, 0, 0))
             want_coll = now - self._last_collection > COLLECTION_EVERY_S
             scan = self._scanner.detail_scan(img, with_collection=want_coll, fast=True)
             self.stats["ocr"] += 1
             self._last_sig, self._candidate = sig, None
             if scan.name:
+                self._mark_calibrated(img, scan)
                 self._last_seen = time.monotonic()
                 self._backoff_until = 0.0
                 self._waiting_reported = False
@@ -274,11 +289,14 @@ class AutoScanWorker(QObject):
             profile = self._profile()
             parts = self._field_parts(mon["width"], mon["height"], profile)
             crops = []
+            dark = True
             for name, box, sc in parts:
                 crop = self._mask(self._grab_box(box), box)
                 sig = _thumb(crop)
+                dark = dark and float(sig.max()) < 12
                 if signature_diff(sig, self._part_sigs.get(name)) >= PART_THRESHOLD:
                     crops.append((name, box, sc, crop, sig))
+            self._check_black(dark, now)
             if not crops:
                 self.stats["skipped"] += 1
                 if self._last_hits:
@@ -301,15 +319,95 @@ class AutoScanWorker(QObject):
         finally:
             self._busy = False
 
+    # ------------------------------------------------------------------ calibration
+    def _calibrated(self) -> bool:
+        if self._scanner is None:
+            return True
+        mon = self._monitor()
+        return self._scanner.profiles.get(mon["width"], mon["height"])[1]
+
+    def _mark_calibrated(self, img, scan):
+        """A good pet read with the current regions proves them right: keep them for this screen."""
+        prof, cal = self._scanner.profiles.get(img.width, img.height)
+        if not cal and scan.level is not None:
+            self._scanner.profiles.save(img.width, img.height, prof)
+
+    def _try_calibrate(self, now: float) -> bool:
+        """Look for the Pets window by its labels; on success save the regions and read the pet."""
+        from app.ocr.calibrate import calibrate
+
+        self._busy = True
+        try:
+            self._cal_attempts += 1
+            mons = self._sct.monitors
+            order = [self.monitor_index]
+            if self._cal_attempts % CAL_OTHER_MONITORS_EVERY == 1 and len(mons) > 2:
+                order += [i for i in range(1, len(mons)) if i != self.monitor_index]
+            all_black = True
+            for idx in order:
+                mon = mons[idx] if 0 < idx < len(mons) else mons[1]
+                from PIL import Image
+                shot = self._sct.grab(mon)
+                img = Image.frombytes("RGB", shot.size, shot.rgb)
+                self.stats["full_grabs"] += 1
+                if max(img.resize((32, 18)).convert("L").getdata()) >= 12:
+                    all_black = False
+                else:
+                    continue
+                if idx == self.monitor_index:
+                    self._mon = mon
+                    img = self._mask(img, (0, 0, 0, 0))
+                prof, scan, msg = calibrate(img, self._scanner.engine, self._scanner)
+                self.stats["ocr"] += 1
+                if prof is None:
+                    continue
+                self._scanner.profiles.save(img.width, img.height, prof)
+                if idx != self.monitor_index:
+                    self.monitor_index = idx
+                    self._mon = mon
+                    self.monitor_changed.emit(idx)
+                    msg += f" · found on monitor {idx}"
+                self.notice.emit("Found the Pets window: " + msg)
+                self._set_mode("pets")
+                self._last_sig = panel_signature(img, prof)
+                self._last_seen = time.monotonic()
+                if scan is not None and scan.name:
+                    self.result.emit(scan)
+                return True
+            if all_black:
+                self._check_black(True, now, force=True)
+            elif not self._cal_hint_sent:
+                self._cal_hint_sent = True
+                self.notice.emit("Open the in-game Pets window once so the tracker can find it on your screen.")
+            return False
+        except Exception as e:  # pragma: no cover
+            traceback.print_exc()
+            self.error.emit(f"{type(e).__name__}: {e}")
+            return False
+        finally:
+            self._busy = False
+
+    def _check_black(self, dark: bool, now: float, force: bool = False):
+        if not dark:
+            self._black_since = None
+            return
+        if self._black_since is None:
+            self._black_since = now
+        if not self._black_warned and (force or now - self._black_since >= BLACK_WARN_S):
+            self._black_warned = True
+            self.notice.emit("The screen capture is black. Set AION 2 to borderless windowed mode "
+                             "(exclusive fullscreen can't be captured), or pick the right monitor in Scan ▸ Game monitor.")
+
     def _enter_pets(self, now: float):
         self._set_mode("pets")
         # Read the selected pet straight away instead of waiting for the next ticks.
-        img = self._grab()
+        img = self._mask(self._grab(), (0, 0, 0, 0))
         profile, _ = self._scanner.profiles.get(img.width, img.height)
         scan = self._scanner.detail_scan(img, with_collection=True, fast=True)
         self.stats["ocr"] += 1
         self._last_sig = panel_signature(img, profile)
         if scan.name:
+            self._mark_calibrated(img, scan)
             self._last_seen = time.monotonic()
             self._last_collection = now
             self.result.emit(scan)
@@ -325,7 +423,7 @@ class AutoScanWorker(QObject):
         from PIL import ImageDraw
 
         d = ImageDraw.Draw(crop)
-        ox, oy = self._mon_origin[0] + box[0], self._mon_origin[1] + box[1]
+        ox, oy = self._mon_origin[0] + box[0], self._mon_origin[1] + box[1]  # box (0,0,..) = whole monitor
         for x1, y1, x2, y2 in self._masks:
             d.rectangle((x1 - ox, y1 - oy, x2 - ox, y2 - oy), fill=(0, 0, 0))
         return crop

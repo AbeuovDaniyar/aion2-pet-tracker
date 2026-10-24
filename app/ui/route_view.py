@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea,
@@ -69,7 +69,10 @@ class RouteTab(QWidget):
         self.picker.currentIndexChanged.connect(self.rebuild)
         self.hide_elite.toggled.connect(self.rebuild)
         self.show_done.toggled.connect(self.rebuild)
-        signals.changed.connect(lambda _: self.rebuild())
+        # Rebuild on the next event-loop turn: the change may come from a checkbox on a card that a
+        # rebuild deletes, and deleting it inside its own signal crashes.
+        self._rebuild_queued = False
+        signals.changed.connect(lambda _: self._queue_rebuild())
         self.rebuild()
 
     # -- data
@@ -92,6 +95,15 @@ class RouteTab(QWidget):
         if self.hide_elite.isChecked():
             out = [s for s in out if not s.elite]
         return out
+
+    def _queue_rebuild(self):
+        if not self._rebuild_queued:
+            self._rebuild_queued = True
+            QTimer.singleShot(0, self._run_queued_rebuild)
+
+    def _run_queued_rebuild(self):
+        self._rebuild_queued = False
+        self.rebuild()
 
     def title(self) -> str:
         return self.picker.currentText()
@@ -170,7 +182,7 @@ class RouteTab(QWidget):
         copy.clicked.connect(lambda _=False, m=st.monster: QGuiApplication.clipboard().setText(m))
         done = QCheckBox("Maxed")
         done.setChecked(pr.maxed)
-        done.toggled.connect(lambda on, pid=st.pet.id: self.store.set_maxed(pid, on))
+        done.toggled.connect(lambda on, pid=st.pet.id: QTimer.singleShot(0, lambda: self.store.set_maxed(pid, on)))
         btns.addWidget(copy)
         btns.addWidget(done)
         g.addLayout(btns, 1, 2, Qt.AlignRight)

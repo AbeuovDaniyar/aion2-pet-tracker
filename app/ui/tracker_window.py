@@ -1,7 +1,7 @@
 """Main tracker window: filter sidebar, pet list, detail panel, route tab."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QFormLayout, QFrame, QHBoxLayout,
@@ -415,6 +415,7 @@ class TrackerTab(QWidget):
     def __init__(self, store: Store, signals: StoreSignals):
         super().__init__()
         self.store = store
+        self._pending_ids: set[str] = set()
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 8, 12, 12)
 
@@ -554,6 +555,19 @@ class TrackerTab(QWidget):
             self.detail.show_pet(None)
 
     def _on_store_changed(self, ids: set[str]):
+        """Queue the update. Rebuilding right here could delete the very row (or checkbox) whose
+        click caused the change while Qt is still handling that click -> crash. Applying it on the
+        next event-loop turn also merges bursts of changes into one redraw."""
+        first = not self._pending_ids
+        self._pending_ids |= set(ids)
+        if first:
+            QTimer.singleShot(0, self._flush_store_changes)
+
+    def _flush_store_changes(self):
+        ids, self._pending_ids = self._pending_ids, set()
+        ids = {i for i in ids if i in self.store.pets}
+        if not ids:
+            return
         spec = self.spec()
         still = all(filter_pets([self.store.pets[i]], self.store.progress, spec) for i in ids)
         if still and all(i in self.items for i in ids):
@@ -578,7 +592,9 @@ class TrackerTab(QWidget):
     def _on_item_changed(self, it: QTreeWidgetItem, col: int):
         pid = it.data(0, PET_ROLE)
         if col == COL_MAX and pid:
-            self.store.set_maxed(pid, it.checkState(COL_MAX) == Qt.Checked)
+            on = it.checkState(COL_MAX) == Qt.Checked
+            # never change the store (which may rebuild the list) inside the item's own signal
+            QTimer.singleShot(0, lambda: self.store.set_maxed(pid, on))
 
     def toggle_selected_maxed(self):
         it = self.tree.currentItem()
