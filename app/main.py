@@ -115,9 +115,7 @@ def _install_crash_log():
     log.parent.mkdir(parents=True, exist_ok=True)
     try:
         fh = open(log, "a", encoding="utf-8")
-        fh.write(f"
-=== start {datetime.now().isoformat(timespec='seconds')} ===
-")
+        fh.write(f"\n=== start {datetime.now().isoformat(timespec='seconds')} ===\n")
         fh.flush()
         faulthandler.enable(fh)  # native crashes (access violations) with the Python stack
         _install_crash_log.fh = fh
@@ -125,8 +123,7 @@ def _install_crash_log():
         return
 
     def hook(etype, value, tb):
-        fh.write(f"--- {datetime.now().isoformat(timespec='seconds')} unhandled error
-")
+        fh.write(f"--- {datetime.now().isoformat(timespec='seconds')} unhandled error\n")
         fh.write("".join(traceback.format_exception(etype, value, tb)))
         fh.flush()
         sys.__excepthook__(etype, value, tb)
