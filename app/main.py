@@ -149,30 +149,42 @@ def main() -> int:
 
 
 def _self_test(app, parts, report: Path):
-    """Packaging check: scan the bundled sample screenshots, write what was read, quit.
-    Run with AION2_TRACKER_HOME pointing at a scratch folder so real progress is untouched."""
+    """Packaging check: OCR an image, load the live map, write what happened, quit.
+    Run with AION2_TRACKER_HOME pointing at a scratch folder so real progress is untouched.
+    Uses the sample screenshots when present (development), otherwise a generated image."""
+    from PIL import Image, ImageDraw, ImageFont
     from PySide6.QtCore import QTimer
-    from app.ocr.capture import load_image
-    from app.ocr.field import MonsterIndex, find_monsters
 
     out = []
-
-    def done_scan(msg):
-        out.append(f"scan: {msg}")
+    sample = DATA / "sample_screens" / "pets_konutin_worker_1080p.png"
 
     def run():
-        parts.scans.message.connect(done_scan)
-        parts.scans.scan_file(str(DATA / "sample_screens" / "pets_konutin_worker_1080p.png"))
-        QTimer.singleShot(8000, finish)
+        parts.scans.message.connect(lambda m: out.append(f"scan: {m}"))
+        if sample.exists():
+            parts.scans.scan_file(str(sample))
+        else:
+            img = Image.new("RGB", (900, 120), (10, 14, 24))
+            d = ImageDraw.Draw(img)
+            try:
+                font = ImageFont.truetype("C:/Windows/Fonts/segoeui.ttf", 40)
+            except OSError:
+                font = ImageFont.load_default()
+            d.text((20, 30), "Konutin Worker Lv. 1 (7/25)", font=font, fill=(240, 240, 240))
+            lines = parts.scans._worker._scanner.engine.read(img) if parts.scans._worker._scanner else []
+            out.append("ocr: " + " ".join(l.text for l in lines))
+        # live map: open the Map tab on a pet and wait for the page
+        pid = next((p.id for p in parts.store.pets.values() if p.name == "Manduri Trebuchet Worker"), None)
+        parts.win.open_map(pid)
+        view = parts.win.map.live_view
+        if view is None:
+            out.append("live map: not created")
+        else:
+            view.loadFinished.connect(lambda ok: out.append(f"live map loaded: {ok} {view.url().toString()}"))
+        QTimer.singleShot(12000, finish)
 
     def finish():
-        w = parts.scans._worker
-        img = load_image(DATA / "sample_screens" / "field_black_claw_1080p.png")
-        lines, chat = w.read_field(img)
-        hits = find_monsters(lines, MonsterIndex(parts.store))
-        out.append("field: " + ", ".join(h.monster for h in hits))
-        out.append(f"chat lines: {len(chat or [])}")
-        out.append(f"maps: {len(parts.store.maps)} · sounds: {parts.scans.sounds.enabled}")
+        out.append(f"maps: {len(parts.store.maps)} | sounds: {parts.scans.sounds.enabled} | "
+                   f"atlas: {parts.store.atlas_meta or 'not yet'}")
         report.write_text(" | ".join(out), encoding="utf-8")
         app.quit()
 
