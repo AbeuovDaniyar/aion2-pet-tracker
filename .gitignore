@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+data/source/
+data/progress.db
+data/ocr_debug/
+config/settings.json
+config/ocr_profiles.json
+dist/
+build/
+# personal game screenshots (character name, chat) - kept local
+data/sample_screens/
