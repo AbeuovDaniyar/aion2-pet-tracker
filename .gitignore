@@ -11,3 +11,4 @@ dist/
 build/
 # personal game screenshots (character name, chat) - kept local
 data/sample_screens/
+release/
