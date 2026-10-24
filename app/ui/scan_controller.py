@@ -234,9 +234,13 @@ class ScanController(QObject):
                 if row is None:
                     rows[pid] = {"name": pet.name, "genus": genus, "maxed": pr.maxed,
                                  "text": self._short_left(pid), "targeted": h.targeted,
-                                 "alert": genus in genera and not pr.maxed, "new": not pr.unlocked}
-                elif h.targeted:
-                    row["targeted"] = True
+                                 "alert": genus in genera and not pr.maxed, "new": not pr.unlocked,
+                                 "monsters": [h.monster]}
+                else:
+                    if h.targeted:
+                        row["targeted"] = True
+                    if h.monster not in row["monsters"]:
+                        row["monsters"].append(h.monster)
         order = sorted(rows.values(), key=lambda r: (r["maxed"], not r["alert"], not r["targeted"], r["name"]))
         self.overlay.set_nearby_rows(order)
 

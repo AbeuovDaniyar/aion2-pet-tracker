@@ -198,9 +198,12 @@ class Overlay(QWidget):
                 op = "opacity:0.5;" if r.get("maxed") else ""
                 name_color = "#ffffff" if r.get("alert") else "#e6ebf2"
                 new = f" <span style='color:{MUTED}; font-size:{self.pt(7.5)}pt'>new</span>" if r.get("new") else ""
+                kill = ", ".join(r.get("monsters") or [])
+                kill = (f"<span style='color:{MUTED}; font-size:{self.pt(8)}pt'> · kill "
+                        f"<span style='color:#c8d2e0'>{escape(kill)}</span></span>") if kill else ""
                 parts.append(
                     f"<tr style='{op}'><td width='1%' style='white-space:nowrap'>{self.pill(r.get('genus'))}</td>"
-                    f"<td>&nbsp;<b style='color:{name_color}'>{escape(r['name'])}</b>{new}</td>"
+                    f"<td>&nbsp;<b style='color:{name_color}'>{escape(r['name'])}</b>{new}{kill}</td>"
                     f"<td align='right' style='white-space:nowrap; color:{MUTED if r.get('maxed') else GOLD}'>"
                     f"<b>{escape(r['text'])}</b></td></tr>")
             parts.append("</table>")
