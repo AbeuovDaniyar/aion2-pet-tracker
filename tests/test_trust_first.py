@@ -37,3 +37,21 @@ def test_known_pets_and_ocr_slips_are_saved(ctl, text):
 def test_special_and_unknown_pets_are_skipped(ctl, text):
     c, scan = ctl
     assert not c._trust_first(scan(text))
+
+
+@pytest.mark.parametrize("read,pet", [
+    ("Spirit King's Bodygua", "Spirit King's Bodyguard Warrior"),
+    ("Mutated Aberrant Od", "Mutated Aberrant Odyle Spider"),
+    ("Elite Poisonous Spore", "Elite Poisonous Spore Fungen"),
+    ("Flame Stone Guardian", "Flame Stone Guardian Statue"),
+    ("Addicted Shulak Cart", "Addicted Shulak Cart Worker"),
+])
+def test_long_names_cut_off_are_saved_without_asking(ctl, read, pet):
+    c, scan = ctl
+    s = scan(read)
+    assert s.match.name == pet and c._trust_first(s)
+
+
+def test_short_cut_off_still_skipped(ctl):
+    c, scan = ctl
+    assert not c._trust_first(scan("Konutin"))   # too short to be sure (could be a special pet)

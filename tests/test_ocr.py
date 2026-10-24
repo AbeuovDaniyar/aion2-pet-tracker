@@ -58,11 +58,16 @@ def test_small_ocr_error_auto():
     assert m.auto and m.pet_id == "h"
 
 
-@pytest.mark.parametrize("query", ["Tamed Karnf", "Unstable Spidr", "Dratona Tinkere", "Elite Karnlf"])
+@pytest.mark.parametrize("query", ["Tamed Karnf", "Unstable Spidr", "Elite Karnlf"])
 def test_lookalikes_never_auto(query):
     m = match_name(query, NAMES)
     assert not m.auto, m.reason
     assert len(m.candidates) == 3
+
+
+def test_cut_off_long_name_is_its_only_prefix_match():
+    m = match_name("Dratona Tinkere", NAMES)      # the name was cut off at the panel edge
+    assert m.auto and m.name == "Dratona Tinkerer" and m.reason.startswith("prefix")
 
 
 def test_exact_lookalike_flagged_but_exact():

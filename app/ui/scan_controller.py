@@ -382,8 +382,8 @@ class ScanController(QObject):
         m = scan.match
         if not (m and m.pet_id and scan.name and not scan.error and scan.level is not None):
             return False
-        if m.score == 100:
-            return True
+        if m.score == 100 or m.reason.startswith("prefix"):
+            return True   # exact, or a long name cut off at the panel edge
         # Special pets (Twitch drops, cash shop, founder's pack...) aren't in the 200-pet list. Only accept
         # what is clearly an OCR slip of a known name, never a different word or a known name with an extra
         # word ("Shiny Konutin Worker" is not "Konutin Worker").
