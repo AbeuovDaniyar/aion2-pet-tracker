@@ -613,7 +613,8 @@ class MainWindow(QMainWindow):
         from app.ui.route_view import RouteTab  # local import keeps modules small
 
         self.store = store
-        self.setWindowTitle("AION 2 Pet Tracker — Asmodian")
+        from app import __version__
+        self.setWindowTitle(f"AION 2 Pet Tracker {__version__} — Asmodian")
         self.resize(1440, 900)
         root = QWidget()
         root.setObjectName("root")

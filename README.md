@@ -50,6 +50,9 @@ Use the **Overlay ▾** button in the tracker header. No hotkey is needed, so it
   changes the text size. Click *Done moving / resizing* when finished.
 - *Text size*: Small, Normal, Large or Extra large.
 - *Show live map when a pet is selected* turns the overlay map on or off.
+- *Hide overlay from screenshots / streams*: off by default, so Discord, OBS and screenshots show the overlay.
+  Turn it on to keep it private. Discord **window** capture of the game never includes overlays; share the
+  screen instead.
 
 ## Auto-scan
 
@@ -88,13 +91,30 @@ while a scan waits: `Ctrl+Shift+Y` first choice, `Ctrl+Shift+1/2/3` pick, `Ctrl+
 (Scan ▸ *Update from Pet Soul Atlas*). It adds every monster, level, area and spawn count the guide doesn't
 list, and the genus for all 200 pets. The guide's routes, pins and maps stay the base.
 
-**Other resolutions:** default regions are measured at 1920×1080 and scaled. If scans miss, use
-Scan ▸ *Calibrate OCR regions…* (capture, drag boxes, Test OCR, Save).
+**Any resolution or UI scale:** the first time auto-scan runs on a screen, open the in-game Pets window once.
+The tracker finds it by its labels ("Pet Info", "Source", "Pet Insight", "Collection Status"), works out where
+everything is, and remembers it for that resolution. This covers ultrawide screens, 1440p/4K and a changed
+in-game UI scale, and it finds the game on another monitor. Scan ▸ *Calibrate OCR regions…* is still there
+for manual fine-tuning.
 
 **Hotkeys** use Windows' `RegisterHotKey` (no keyboard hook): `Ctrl+Shift+P` auto-scan, `Ctrl+Shift+O` show /
 hide overlay, `Ctrl+Shift+I` move overlay. **AION 2 runs as administrator**, which can block hotkeys from normal
 apps while the game has focus. Use the buttons, or run the tracker as administrator (shortcut ▸ Properties ▸
 Advanced).
+
+## Troubleshooting
+
+**Auto-scan doesn't recognize pets**
+1. Run AION 2 in **borderless windowed** mode. Exclusive fullscreen can't be captured, and the tracker warns
+   when the capture is black.
+2. Start auto-scan, then open the in-game **Pets** window and select a pet. A popup "Found the Pets window" means
+   it calibrated. Keep the overlay off the right-hand pet panel.
+3. The tracker reads the **English** game client. Other client languages show other pet names.
+4. Still nothing? Use Scan ▸ **Save diagnostic report…** with the Pets window open. It saves a zip (monitor
+   screenshots, what OCR read, settings, crash log) and opens its folder. Send that zip to the developer.
+
+**The app crashed**: details are written to `%LOCALAPPDATA%\AION2 Pet Tracker\crash.log`, which is also included
+in the diagnostic report.
 
 ## Build from source
 

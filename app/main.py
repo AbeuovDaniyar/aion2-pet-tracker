@@ -221,6 +221,43 @@ def _self_test(app, parts, report: Path):
     QTimer.singleShot(3000, run)
 
 
+class DiagnosticsRunner(QObject):
+    """Builds the diagnostic zip on a background thread, then opens its folder."""
+    finished = Signal(str, str)
+
+    def __init__(self, store, settings, scans, win):
+        super().__init__(win)
+        self.store, self.settings, self.scans, self.win = store, settings, scans, win
+        self.finished.connect(self._done)
+        self._busy = False
+
+    def run(self):
+        import threading
+        if self._busy:
+            return
+        self._busy = True
+        self.win.statusBar().showMessage("Building diagnostic report (takes a few seconds)…")
+
+        def work():
+            try:
+                from app.diagnostics import build_report
+                from app.ocr.engine import make_engine
+                path = build_report(self.store, self.settings, make_engine(threads=2), self.scans.profiles)
+                self.finished.emit("ok", str(path))
+            except Exception as e:
+                self.finished.emit("err", f"{type(e).__name__}: {e}")
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _done(self, kind, val):
+        self._busy = False
+        if kind == "ok":
+            self.win.statusBar().showMessage(f"Diagnostic report saved: {val}", 15000)
+            _open_folder(Path(val).parent)
+        else:
+            self.win.statusBar().showMessage(f"Diagnostic report failed: {val}", 15000)
+
+
 class AtlasUpdater(QObject):
     """Downloads the Pet Soul Atlas data in the background and merges it into the store."""
     finished = Signal(str, object)   # emitted from the download thread, handled on the GUI thread
@@ -326,6 +363,12 @@ def build(app, store, settings, show: bool = True, hotkeys=None) -> Parts:
             overlay.hide_map()
 
     show_map.toggled.connect(set_show_map)
+
+    hide_cap = win.overlay_menu.addAction("Hide overlay from screenshots / streams")
+    hide_cap.setToolTip("Off: Discord, OBS and screenshots show the overlay. On: only you see it.")
+    hide_cap.setCheckable(True)
+    hide_cap.setChecked(settings["overlay"].get("hide_from_capture", False))
+    hide_cap.toggled.connect(overlay.set_capture_hidden)
     win.on_confirm = scans.confirm
 
     def set_auto_btn(on: bool):
@@ -366,6 +409,8 @@ def build(app, store, settings, show: bool = True, hotkeys=None) -> Parts:
     QTimer.singleShot(4000, atlas.update_if_stale)
     menu.addAction("Calibrate OCR regions…", lambda: _calibrate(win, scans, settings))
     menu.addAction("Open OCR debug folder", lambda: _open_folder(USER_DATA / "ocr_debug"))
+    diag = DiagnosticsRunner(store, settings, scans, win)
+    menu.addAction("Save diagnostic report… (send it if auto-scan doesn't work)", diag.run)
     menu.addAction("Open my data folder", lambda: _open_folder(USER_DATA.parent))
 
     def on_hotkey(action: str):

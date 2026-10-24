@@ -283,20 +283,31 @@ class Overlay(QWidget):
     # ------------------------------------------------------------------ capture exclusion
     def showEvent(self, e):
         super().showEvent(e)
-        self.capture_excluded = self._exclude_from_capture()
+        self._apply_capture_mode()
         self.geometry_changed.emit()
         QTimer.singleShot(0, self._fit)
 
-    def _exclude_from_capture(self) -> bool:
-        """Keep the overlay out of our own screenshots (Windows 10 2004+), so scans see only the game."""
+    def set_capture_hidden(self, hidden: bool):
+        self.settings["overlay"]["hide_from_capture"] = hidden
+        save_settings(self.settings)
+        self._apply_capture_mode()
+        self.geometry_changed.emit()
+
+    def _apply_capture_mode(self):
+        """Visible in screenshots / Discord / OBS by default. With 'hide_from_capture' on, Windows leaves
+        the overlay out of every capture (Windows 10 2004+). Auto-scan masks the overlay itself either way."""
+        hide = bool(self.settings["overlay"].get("hide_from_capture", False))
+        self.capture_excluded = False
         if sys.platform != "win32":
-            return False
+            return
         try:
             import ctypes
-            WDA_EXCLUDEFROMCAPTURE = 0x11
-            return bool(ctypes.windll.user32.SetWindowDisplayAffinity(int(self.winId()), WDA_EXCLUDEFROMCAPTURE))
+            WDA_NONE, WDA_EXCLUDEFROMCAPTURE = 0x0, 0x11
+            ok = ctypes.windll.user32.SetWindowDisplayAffinity(int(self.winId()),
+                                                              WDA_EXCLUDEFROMCAPTURE if hide else WDA_NONE)
+            self.capture_excluded = bool(ok) and hide
         except Exception:
-            return False
+            pass
 
     # ------------------------------------------------------------------ modes
     def _mode_changed(self, *_):

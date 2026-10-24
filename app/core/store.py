@@ -80,7 +80,7 @@ DEFAULT_SETTINGS = {
     },
     "confidence": {"auto_accept": 0.90, "fuzzy_ratio": 92, "fuzzy_margin": 6},
     "overlay": {"opacity": 0.88, "x": 40, "y": 160, "width": 340, "height": 440, "top_n": 12,
-                "visible": True},
+                "visible": True, "hide_from_capture": False},
     "max_level": 3,
 }
 

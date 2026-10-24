@@ -74,6 +74,8 @@ class ScanController(QObject):
         self._worker.status.connect(self._on_status)
         self._worker.stopped.connect(self._on_stopped)
         self._worker.error.connect(self._on_error)
+        self._worker.notice.connect(self._on_notice)
+        self._worker.monitor_changed.connect(self._on_monitor_changed)
         self._worker.field_hits.connect(self._on_field)
         self._worker.souls.connect(self._on_souls)
         self._worker.mode_changed.connect(self._on_mode)
@@ -152,8 +154,8 @@ class ScanController(QObject):
     def _send_masks(self):
         """Tell the worker where our overlay is so field reads never see its monster names."""
         o = self.overlay
-        if not o.isVisible():
-            self._set_masks.emit([])
+        if not o.isVisible() or o.capture_excluded:
+            self._set_masks.emit([])   # not in the screen grabs: nothing to black out
             return
         r = o.frameGeometry()
         dpr = o.devicePixelRatioF()
@@ -287,6 +289,16 @@ class ScanController(QObject):
 
     def _on_status(self, text: str):
         pass  # the overlay's status pill already shows what auto-scan is doing
+
+    def _on_notice(self, text: str):
+        if not self.queue:
+            self.overlay.show_toast(text, 7000)
+        self.message.emit(text)
+
+    def _on_monitor_changed(self, idx: int):
+        from app.core.store import save_settings
+        self.settings["monitor_index"] = idx
+        save_settings(self.settings)
 
     def _on_error(self, text: str):
         self.busy = False
